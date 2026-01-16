@@ -22,6 +22,16 @@ class Component:
         self.connections: Dict[str, ConnectionInterface] = connections
         self.threads: List[threading.Thread] = []
 
+    @property
+    def log_connection(self) -> ConnectionInterface:
+        """
+        Convenience property to access the log_connection.
+        
+        Returns:
+            The log_connection if available, otherwise None.
+        """
+        return self.connections.get('log_connection')
+
 
     def add_method(self, method: Callable) -> None:
         """

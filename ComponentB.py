@@ -1,10 +1,19 @@
 from Component import Component
 from ConnectionInterface import ConnectionInterface
+from Log import Log
 
 
 class ComponentB(Component):
     """
-    Implementation of Component that manages receiver methods.
+    Intermediary component that receives messages from ComponentA, forwards to ComponentC (bidirectional),
+    and handles responses from ComponentC.
+    
+    Flow:
+    - Receives messages from ComponentA on connection_in (unidirectional)
+    - Forwards to ComponentC on connection_forward (bidirectional) and receives response
+    
+    Methods:
+    - receiver: Listens to ComponentA, forwards to ComponentC, handles responses
     """
 
     def __init__(self, **connections: ConnectionInterface) -> None:
@@ -13,35 +22,36 @@ class ComponentB(Component):
         
         Args:
             **connections: Connection objects passed as keyword arguments.
-                          Expected connections: 'connection_in', 'connection_forward', and optionally 'log_connection'.
+                          Required: 'connection_in' (unidirectional from ComponentA), 'connection_forward' (bidirectional with ComponentC)
+                          Optional: 'log_connection' (for logging)
                           
         Example:
-            component = ComponentB(connection_in=conn_in, connection_forward=conn_forward, log_connection=log_conn)
+            component = ComponentB(connection_in=conn_in, connection_forward=conn_bc, log_connection=log_conn)
         """
         super().__init__(**connections)
         
         # Associate receiver method
         if 'connection_in' in connections:
-            self.add_method(self.receiver_method)
+            self.add_method(self.receiver)
 
-    def receiver_method(self) -> None:
+    def receiver(self) -> None:
         """
-        Receiver method that listens and forwards received data to another connection.
+        Receives messages from ComponentA, forwards to ComponentC, and handles responses.
+        
+        Flow:
+        1. Listens on connection_in for messages from ComponentA
+        2. Forwards each message to ComponentC on connection_forward (bidirectional)
+        3. Receives response/acknowledgment from ComponentC
         """
         def message_handler(data: str) -> str:
-            if 'log_connection' in self.connections:
-                formatted_msg = f"ComponentB::receiver_method - received '{data}'"
-                self.connections['log_connection'].send(formatted_msg)
+            Log.send(f"received: {data}", self.log_connection)
             
-            # Forward the data to another connection if provided
+            # Forward the data to ComponentC and get response (bidirectional connection)
             if 'connection_forward' in self.connections:
-                self.connections['connection_forward'].send(data)
-                if 'log_connection' in self.connections:
-                    formatted_msg = f"ComponentB::receiver_method - forwarded '{data}'"
-                    self.connections['log_connection'].send(formatted_msg)
+                Log.send(f"forwards: {data}", self.log_connection)
+                response = self.connections['connection_forward'].send(data)
+                Log.send(f"received: {response}", self.log_connection)
             
-            # Return acknowledgement
-            ack_msg = f"{data}"
-            return ack_msg
+            return ""
         
         self.connections['connection_in'].listen(message_handler)

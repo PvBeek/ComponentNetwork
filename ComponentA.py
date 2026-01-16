@@ -1,12 +1,16 @@
 from Component import Component
 from ConnectionInterface import ConnectionInterface
 from collections import deque
-import inspect
+from Log import Log
 
 
 class ComponentA(Component):
     """
-    Implementation of Component that manages sender methods.
+    Sender component that sends incrementing messages to ComponentB and receives feedback from ComponentC.
+    
+    Methods:
+    - sender: Sends incrementing messages through connection_out
+    - receiver: Receives feedback from ComponentC and verifies messages
     """
 
     def __init__(self, **connections: ConnectionInterface) -> None:
@@ -15,7 +19,8 @@ class ComponentA(Component):
         
         Args:
             **connections: Connection objects passed as keyword arguments.
-                          Expected connections: 'connection_out', 'connection_feedback', and 'log_connection'.
+                          Required: 'connection_out' (unidirectional to ComponentB), 'connection_feedback' (unidirectional from ComponentC)
+                          Optional: 'log_connection' (for logging)
                           
         Example:
             component = ComponentA(connection_out=conn_out, connection_feedback=conn_feedback, log_connection=log_conn)
@@ -27,45 +32,42 @@ class ComponentA(Component):
         
         # Associate sender method
         if 'connection_out' in connections:
-            self.add_method(self.sender_method)
+            self.add_method(self.sender)
         
         # Associate listener method for feedback from ComponentC
         if 'connection_feedback' in connections:
-            self.add_method(self.listener_method)
+            self.add_method(self.receiver)
 
-    def sender_method(self) -> None:
+    def sender(self) -> None:
         """
-        Sender method that sends incrementing messages through the connection.
+        Sends incrementing messages to ComponentB.
+        
+        Generates messages in format 'message N' and sends them through connection_out.
+        Logs each sent message using Log.send().
         """
         counter = 0
         while True:
             counter += 1
-            message = f"Message {counter}"
+            message = f"message {counter}"
             self.sent_messages.append(message)  # Store the sent message
-            if 'log_connection' in self.connections:
-                formatted_msg = f"ComponentA::sender_method - sends '{message}'"
-                self.connections['log_connection'].send(formatted_msg)
-            response = self.connections['connection_out'].send(message)
-            if 'log_connection' in self.connections:
-                formatted_msg = f"ComponentA::sender_method - received acknowledged '{response}'"
-                self.connections['log_connection'].send(formatted_msg)
+            Log.send(f"sent: {message}", self.log_connection)
+            self.connections['connection_out'].send(message)
             import time
             time.sleep(3)
 
-    def listener_method(self) -> None:
+    def receiver(self) -> None:
         """
-        Listener method that receives feedback from ComponentC and verifies it matches sent messages.
+        Receives feedback messages from ComponentC and verifies they match sent messages.
+        
+        Listens on connection_feedback for feedback messages. When received, checks if the message
+        was previously sent (stored in self.sent_messages). Logs whether verification succeeded or failed.
         """
         def message_handler(data: str) -> str:
             if data in self.sent_messages:
                 self.sent_messages.remove(data)  # Remove after verification
-                if 'log_connection' in self.connections:
-                    formatted_msg = f"ComponentA::listener_method - received feedback: '{data}' ✓ VERIFIED"
-                    self.connections['log_connection'].send(formatted_msg)
+                Log.send(f"received: {data} ✓ VERIFIED", self.log_connection)
             else:
-                if 'log_connection' in self.connections:
-                    formatted_msg = f"ComponentA::listener_method - received feedback: '{data}' ✗ NOT FOUND"
-                    self.connections['log_connection'].send(formatted_msg)
+                Log.send(f"received: {data} ✗ NOT FOUND", self.log_connection)
             return ""
         
         self.connections['connection_feedback'].listen(message_handler)

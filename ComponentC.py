@@ -1,10 +1,20 @@
 from Component import Component
 from ConnectionInterface import ConnectionInterface
+from Log import Log
 
 
 class ComponentC(Component):
     """
-    Implementation of Component that manages listener methods for forwarded data.
+    Final component that receives forwarded messages from ComponentB (bidirectional),
+    sends acknowledgments back to ComponentB, and forwards feedback to ComponentA.
+    
+    Flow:
+    - Receives messages from ComponentB on connection_forward (bidirectional)
+    - Sends acknowledgment response back to ComponentB on same connection
+    - Sends feedback to ComponentA on connection_feedback (unidirectional)
+    
+    Methods:
+    - receiver: Listens to ComponentB, sends acknowledgments, and forwards feedback to ComponentA
     """
 
     def __init__(self, **connections: ConnectionInterface) -> None:
@@ -13,34 +23,41 @@ class ComponentC(Component):
         
         Args:
             **connections: Connection objects passed as keyword arguments.
-                          Expected connections: 'connection_forward', 'connection_feedback', and optionally 'log_connection'.
+                          Required: 'connection_forward' (bidirectional with ComponentB), 'connection_feedback' (unidirectional to ComponentA)
+                          Optional: 'log_connection' (for logging)
                           
         Example:
-            component = ComponentC(connection_forward=conn_forward, connection_feedback=conn_feedback, log_connection=log_conn)
+            component = ComponentC(connection_forward=conn_bc, connection_feedback=conn_feedback, log_connection=log_conn)
         """
         super().__init__(**connections)
         
         # Associate feedback forwarder method
         if 'connection_forward' in connections:
-            self.add_method(self.feedback_forwarder)
+            self.add_method(self.receiver)
 
-    def feedback_forwarder(self) -> None:
+    def receiver(self) -> None:
         """
-        Feedback forwarder method that listens to forwarded data and sends it back to ComponentA.
+        Receives messages from ComponentB, sends acknowledgments, and forwards feedback to ComponentA.
+        
+        Flow:
+        1. Listens on connection_forward (bidirectional) for messages from ComponentB
+        2. Sends acknowledgment response back to ComponentB on the same connection
+        3. Sends the message as feedback to ComponentA on connection_feedback
         """
         def message_handler(data: str) -> str:
-            if 'log_connection' in self.connections:
-                formatted_msg = f"ComponentC::feedback_forwarder - received forwarded '{data}'"
-                self.connections['log_connection'].send(formatted_msg)
+            Log.send(f"received: {data}", self.log_connection)
             
-            if 'log_connection' in self.connections:
-                formatted_msg = f"ComponentC::feedback_forwarder - sending feedback '{data}'"
-                self.connections['log_connection'].send(formatted_msg)
+            # Send acknowledgment back to ComponentB on the bidirectional connection
+            ack_msg = f"ack {data}"
+            Log.send(f"replying: {ack_msg}", self.log_connection)
             
-            # Forward the data back to ComponentA via feedback connection
+            # Send feedback to ComponentA via feedback connection
+            Log.send(f"forwards: {data}", self.log_connection)
             if 'connection_feedback' in self.connections:
                 self.connections['connection_feedback'].send(data)
-            return ""
+            
+            # Return the acknowledgment to send back to ComponentB on the bidirectional connection
+            return ack_msg
         
         self.connections['connection_forward'].listen(message_handler)
 
