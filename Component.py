@@ -6,7 +6,7 @@ from ConnectionInterface import ConnectionInterface
 class Component:
     """
     Class that manages running multiple methods in separate threads.
-    Each method receives connections as keyword arguments.
+    Methods can access connections through self.connections.
     """
 
     def __init__(self, **connections: ConnectionInterface) -> None:
@@ -18,45 +18,31 @@ class Component:
                           The key represents the connection name/identifier,
                           and the value is a ConnectionInterface instance.
         """
-        self.methods: List[Tuple[Callable, Dict[str, ConnectionInterface]]] = []
+        self.methods: List[Callable] = []
         self.connections: Dict[str, ConnectionInterface] = connections
         self.threads: List[threading.Thread] = []
 
 
-    def add_method_with_connections(self, method: Callable, *connection_names: str) -> None:
+    def add_method(self, method: Callable) -> None:
         """
-        Add a method with specific connections to be passed to it.
+        Add a method to be executed in a thread.
         
         Args:
             method: The method to execute in a thread.
-            *connection_names: Names of the connections to pass to this method.
         """
-        method_connections = self.get_connections(*connection_names)
-        self.methods.append((method, method_connections))
+        self.methods.append(method)
 
     def run(self) -> None:
         """
         Run all methods in the list in separate threads.
-        Each method receives only its associated connections as keyword arguments.
+        Methods have access to self.connections.
         """
-        for method, method_connections in self.methods:
-            # Create a thread for each method, passing only its associated connections as kwargs
-            thread = threading.Thread(target=method, kwargs=method_connections, daemon=True)
+        for method in self.methods:
+            # Create a thread for each method
+            thread = threading.Thread(target=method, daemon=True)
             self.threads.append(thread)
             # Start the thread
             thread.start()
-
-    def get_connections(self, *connection_names: str) -> Dict[str, ConnectionInterface]:
-        """
-        Get a subset of connections by name.
-        
-        Args:
-            *connection_names: Names of the connections to retrieve.
-            
-        Returns:
-            A dictionary containing only the requested connections.
-        """
-        return {name: self.connections[name] for name in connection_names if name in self.connections}
 
     def stop(self) -> None:
         """
