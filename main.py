@@ -3,6 +3,7 @@ from ComponentA import ComponentA
 from ComponentB import ComponentB
 from ComponentC import ComponentC
 from Log import Log
+from Message import Message
 import time
 
 
@@ -10,14 +11,17 @@ def main():
     """
     Main entry point for the ComponentNetwork application.
     """
+    # Create IntegerContract for data connections
+    integer_contract = Message()
+    
     # Create a unidirectional queue connection for sending data from A to B
-    connection_a_to_b = Connection('queue', bidirectional=False)
+    connection_a_to_b = Connection('queue', bidirectional=False, contract=integer_contract)
     
     # Create a bidirectional queue connection for two-way communication between B and C
-    connection_b_c = Connection('queue', bidirectional=True)
+    connection_b_c = Connection('queue', bidirectional=True, contract=integer_contract)
     
     # Create a unidirectional queue connection for feedback from C back to A
-    feedback_connection = Connection('queue', bidirectional=False)
+    feedback_connection = Connection('queue', bidirectional=False, contract=integer_contract)
     
     # Create a unidirectional queue connection for logging
     log_connection = Connection('queue', bidirectional=False)

@@ -39,9 +39,9 @@ class ComponentB(Component):
         Receives messages from ComponentA, forwards to ComponentC, and handles responses.
         
         Flow:
-        1. Listens on connection_in for messages from ComponentA
-        2. Forwards each message to ComponentC on connection_forward (bidirectional)
-        3. Receives response/acknowledgment from ComponentC
+        1. Listens on connection_in for messages from ComponentA (already serialized)
+        2. Forwards data as-is to ComponentC (no serialization/deserialization)
+        3. Receives response and returns it as-is
         """
         def message_handler(data: str) -> str:
             Log.send(f"received: {data}", self.log_connection)
@@ -51,6 +51,7 @@ class ComponentB(Component):
                 Log.send(f"forwards: {data}", self.log_connection)
                 response = self.connections['connection_forward'].send(data)
                 Log.send(f"received: {response}", self.log_connection)
+                return response
             
             return ""
         

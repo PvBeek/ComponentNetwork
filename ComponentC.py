@@ -40,25 +40,23 @@ class ComponentC(Component):
         Receives messages from ComponentB, sends acknowledgments, and forwards feedback to ComponentA.
         
         Flow:
-        1. Listens on connection_forward (bidirectional) for messages from ComponentB
-        2. Sends acknowledgment response back to ComponentB on the same connection
-        3. Sends the message as feedback to ComponentA on connection_feedback
+        1. Listens on connection_forward (bidirectional) for messages from ComponentB (already serialized)
+        2. Forwards data as-is to ComponentA feedback (no serialization/deserialization)
+        3. Returns acknowledgment as-is
         """
         def message_handler(data: str) -> str:
             Log.send(f"received: {data}", self.log_connection)
             
-            # Send acknowledgment back to ComponentB on the bidirectional connection
-            ack_msg = f"ack {data}"
-            Log.send(f"replying: {ack_msg}", self.log_connection)
-            
-            # Send feedback to ComponentA via feedback connection
-            Log.send(f"forwards: {data}", self.log_connection)
+            # Send feedback to ComponentA via feedback connection (data already serialized)
             if 'connection_feedback' in self.connections:
+                Log.send(f"forwards: {data}", self.log_connection)
                 self.connections['connection_feedback'].send(data)
             
-            # Return the acknowledgment to send back to ComponentB on the bidirectional connection
-            return ack_msg
+            # Return acknowledgment to ComponentB (echo back the same data)
+            Log.send(f"replying: {data}", self.log_connection)
+            return data
         
         self.connections['connection_forward'].listen(message_handler)
+
 
 

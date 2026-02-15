@@ -6,14 +6,15 @@ from ConnectionInterface import ConnectionInterface
 class QueueConnection(ConnectionInterface):
     """Implementation of Connection that uses queues for communication."""
 
-    def __init__(self, bidirectional: bool = True) -> None:
+    def __init__(self, bidirectional: bool = True, contract=None) -> None:
         """
         Initialize the QueueConnection.
         
         Args:
             bidirectional: Whether messages are replied to the sender. Defaults to True.
+            contract: Optional DataContract for serialization/deserialization. Defaults to None.
         """
-        super().__init__(bidirectional)
+        super().__init__(bidirectional, contract)
         self.down_queue: Queue = Queue()
         self.down_queue.name = "down_queue"
         self.up_queue: Queue = Queue()

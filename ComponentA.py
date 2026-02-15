@@ -1,16 +1,17 @@
 from Component import Component
 from ConnectionInterface import ConnectionInterface
-from collections import deque
 from Log import Log
 
 
 class ComponentA(Component):
     """
-    Sender component that sends incrementing messages to ComponentB and receives feedback from ComponentC.
+    Sender component that sends incrementing integer counter values to ComponentB and receives feedback from ComponentC.
+    
+    Uses IntegerContract to serialize/deserialize integer values in format 'Message <integer>'.
     
     Methods:
-    - sender: Sends incrementing messages through connection_out
-    - receiver: Receives feedback from ComponentC and verifies messages
+    - sender: Sends incrementing integer counter values through connection_out
+    - receiver: Receives feedback integers from ComponentC and verifies they match sent values
     """
 
     def __init__(self, **connections: ConnectionInterface) -> None:
@@ -19,7 +20,8 @@ class ComponentA(Component):
         
         Args:
             **connections: Connection objects passed as keyword arguments.
-                          Required: 'connection_out' (unidirectional to ComponentB), 'connection_feedback' (unidirectional from ComponentC)
+                          Required: 'connection_out' (unidirectional to ComponentB with IntegerContract), 
+                                    'connection_feedback' (unidirectional from ComponentC with IntegerContract)
                           Optional: 'log_connection' (for logging)
                           
         Example:
@@ -27,8 +29,8 @@ class ComponentA(Component):
         """
         super().__init__(**connections)
         
-        # Store sent messages to verify feedback
-        self.sent_messages = deque(maxlen=100)  # Keep last 100 messages
+        # Store sent counter values to verify feedback
+        self.sent_counters = set()  # Store integer counter values
         
         # Associate sender method
         if 'connection_out' in connections:
@@ -40,34 +42,56 @@ class ComponentA(Component):
 
     def sender(self) -> None:
         """
-        Sends incrementing messages to ComponentB.
+        Sends incrementing integer counter values to ComponentB.
         
-        Generates messages in format 'message N' and sends them through connection_out.
-        Logs each sent message using Log.send().
+        Generates integers (1, 2, 3, ...) and sends them through connection_out.
+        Uses the connection's contract to serialize the integer (e.g., to 'Message <integer>' format).
+        Logs each sent counter using Log.send().
         """
         counter = 0
         while True:
             counter += 1
-            message = f"message {counter}"
-            self.sent_messages.append(message)  # Store the sent message
-            Log.send(f"sent: {message}", self.log_connection)
-            self.connections['connection_out'].send(message)
+            self.sent_counters.add(counter)  # Store the counter value
+            Log.send(f"sent: {counter}", self.log_connection)
+            
+            # Serialize using connection's contract if available
+            connection_out = self.connections['connection_out']
+            if connection_out.contract:
+                data_to_send = connection_out.contract.serialize(counter)
+            else:
+                data_to_send = counter
+            
+            connection_out.send(data_to_send)
             import time
             time.sleep(3)
 
     def receiver(self) -> None:
         """
-        Receives feedback messages from ComponentC and verifies they match sent messages.
+        Receives feedback from ComponentC and verifies they match sent counter values.
         
-        Listens on connection_feedback for feedback messages. When received, checks if the message
-        was previously sent (stored in self.sent_messages). Logs whether verification succeeded or failed.
+        Listens on connection_feedback for feedback. Uses the connection's contract to 
+        deserialize the data (e.g., from 'Message <integer>' format to integer).
+        When received, checks if the integer was previously sent (stored in self.sent_counters).
+        Logs whether verification succeeded or failed.
         """
         def message_handler(data: str) -> str:
-            if data in self.sent_messages:
-                self.sent_messages.remove(data)  # Remove after verification
-                Log.send(f"received: {data} ✓ VERIFIED", self.log_connection)
+            # Deserialize using connection's contract if available
+            connection_feedback = self.connections['connection_feedback']
+            if connection_feedback.contract:
+                counter_value = connection_feedback.contract.deserialize(data)
             else:
-                Log.send(f"received: {data} ✗ NOT FOUND", self.log_connection)
-            return ""
+                counter_value = int(data) if isinstance(data, str) else data
+            
+            if counter_value in self.sent_counters:
+                self.sent_counters.remove(counter_value)  # Remove after verification
+                Log.send(f"received: {counter_value} ✓ VERIFIED", self.log_connection)
+            else:
+                Log.send(f"received: {counter_value} ✗ NOT FOUND", self.log_connection)
+            
+            # Return serialized response
+            if connection_feedback.contract:
+                return connection_feedback.contract.serialize(counter_value)
+            else:
+                return str(counter_value)
         
         self.connections['connection_feedback'].listen(message_handler)
